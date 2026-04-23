@@ -39,7 +39,8 @@ class DayWeather(TypedDict):
     wind_dir_day: str  # 白天风向
     wind_scale_day: str  # 白天风力
     precip: float  # 降水量
-    uv_index: int # 紫外线强度
+    uv_index: int  # 紫外线强度
+    suggestion: str  # 建议
 
 
 class TravelWeather(TypedDict):
@@ -76,11 +77,8 @@ class State(TypedDict):
     # 旅行天气
     travel_weather: TravelWeather | None
 
-
     # 预算细分
     budget_breakdown: BudgetBreakdown | None
 
     # Workflow state
     current_step: str
-
-

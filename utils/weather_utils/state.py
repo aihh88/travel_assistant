@@ -18,6 +18,7 @@ class DayWeather(TypedDict):
     wind_scale_day: str  # 白天风力
     precip: float  # 降水量
     uv_index: int  # 紫外线强度
+    suggestion: str  # 建议
 
 
 class WeatherState(TypedDict):
@@ -32,9 +33,6 @@ class WeatherState(TypedDict):
 
     # Weather result Daily Weather List
     travel_weather: list[DayWeather] | None  # 旅行天气汇总
-
-    # Current step
-    current_step: str
 
     # Completion state: completed, not_started, incomplete, error
     complete_state: Literal["completed", "not_started", "incomplete", "error"]

@@ -17,7 +17,7 @@ This is a **LangChain-based multi-agent travel assistant** using a hierarchical 
 1. User input → `supervisor_node` (路由判断)
 2. `supervisor_node` checks `preferences.complete_state`:
    - `"not_started"` or `"incomplete"` → `Command(goto="call_preferences_subgraph_node")`
-   - `"completed"` → `Command(goto="__end__")` 结束
+   - `"completed"` → `Command(goto="call_weather_subgraph_node")` → 天气查询 → `__end__`
 3. `call_preferences_subgraph_node`:
    - `transform_state2subgraph()` → 转换状态
    - `preferences_subgraph.invoke()` → 调用子图
@@ -53,21 +53,30 @@ This is a **LangChain-based multi-agent travel assistant** using a hierarchical 
 │   └── nodes/
 │       ├── __init__.py
 │       ├── supervisor_node.py        # Supervisor node, routes based on complete_state
-│       └── call_preferences_node.py # Call subgraph + parent-child state transform
-├── assistants/
-│   └── preferences_assistant/        # Preferences collection subgraph
+│       ├── call_preferences_node.py  # Call subgraph + parent-child state transform
+│       └── call_weather_node.py      # Weather query node (serial, TODO: parallel)
+├── assistants/                       # Assistant subgraphs
+│   └── preferences_assistant/         # Preferences collection subgraph
 │       ├── __init__.py
-│       ├── graph.py                  # Subgraph builder
-│       ├── state.py                  # PreferencesState
+│       ├── graph.py                 # Subgraph builder
+│       ├── state.py                 # PreferencesState
+│       ├── tools.py                 # Tools (get_current_date)
 │       └── nodes/
 │           ├── __init__.py
-│           ├── utils.py              # Shared utilities (SYSTEM_PROMPT, parse_llm_json_response, etc.)
+│           ├── utils.py             # Shared utilities (SYSTEM_PROMPT, parse_llm_json_response, etc.)
 │           ├── extract_intent_node.py # Extract user intent from message
 │           ├── check_complete_node.py # Check if all required fields collected
 │           └── ask_followup_node.py   # Ask user for missing fields
-├── tests/                            # Test files
-├── utils/                            # Utility directory
-└── problem.md                        # 问题总结文档
+├── utils/                           # Utility functions
+│   ├── __init__.py
+│   └── weather_utils/                # Weather API utilities
+│       ├── __init__.py
+│       ├── city_utils.py            # lookup_city, lookup_city_by_coordinates
+│       ├── jwt_utils.py            # JWT token generation
+│       ├── weather_utils.py        # query_weather, get_travel_weather
+│       └── state.py                # Weather-related state definitions
+├── tests/                           # Test files
+└── problem.md                       # 问题总结文档
 ```
 
 ## Tech Stack
@@ -198,32 +207,48 @@ class PreferencesState(TypedDict):
     complete_state: Literal["completed", "not_started", "incomplete"]
 ```
 
-### Subgraph State (WeatherState)
+## Weather Query Node
+
+**Current: Serial execution (串行)**
+```
+supervisor_node (complete_state="completed")
+    ↓ goto call_weather_subgraph_node
+call_weather_subgraph_node
+    ↓ 直接调用 get_travel_weather()
+weather API
+    ↓ update={travel_weather: ...}
+__end__
+```
+
+**Planned: Parallel execution (并行) - TODO**
+```
+supervisor_node (complete_state="completed")
+    ↓ goto parallel_query_node
+parallel_query_node
+    ├─→ weather_query_node (Send)
+    └─→ transportation_query_node (Send)
+         ↓ (两者并行完成)
+plan_generation_node
+    ↓
+__end__
+```
+
+## Weather Utilities
+
+Weather utilities are plain functions (not LangGraph nodes) in `utils/weather_utils/`:
 
 ```python
-class DayWeather(TypedDict):
-    """单日天气"""
-    date: str                   # 日期 YYYY-MM-DD
-    temp_max: int               # 最高温度
-    temp_min: int               # 最低温度
-    text_day: str               # 白天天气描述
-    text_night: str             # 夜间天气描述
-    wind_dir_day: str           # 白天风向
-    wind_scale_day: str         # 白天风力
-    precip: float               # 降水量
-    uv_index: int               # 紫外线强度
+from utils.weather_utils import get_travel_weather
 
-
-class WeatherState(TypedDict):
-    """Weather subgraph local state"""
-    messages: Annotated[list, add_messages]  # Conversation历史
-    destination: str | None                  # 目的地
-    departure_date: str | None              # 出发日期
-    days: int | None                        # 天数
-    travel_weather: list[DayWeather] | None # 旅行天气列表
-    current_step: str                        # 当前步骤
-    complete_state: Literal["completed", "not_started", "incomplete", "error"]
+# 获取游玩期间的天气预报
+weather = get_travel_weather("成都", "2026-04-24", 3)
+# 返回: [{"date": "2026-04-24", "temp_max": 26, "temp_min": 15, ...}, ...]
 ```
+
+**Functions:**
+- `lookup_city(location)` - 根据城市名查找城市信息，返回 `CityInfo`
+- `query_weather(city_id, days)` - 查询天气预报，返回 `WeatherResult`
+- `get_travel_weather(destination, departure_date, days)` - 获取游玩期间的天气预报
 
 ## Parent-Child State Transform
 
@@ -248,7 +273,7 @@ class WeatherState(TypedDict):
 |-------|---------|------------------|
 | `"not_started"` | No preference collection started | Continue to subgraph |
 | `"incomplete"` | Some fields missing, awaiting user response | Pause (goto `__end__`), wait for user |
-| `"completed"` | All required fields collected | End (goto `__end__`) |
+| `"completed"` | All required fields collected | End (goto `call_weather_subgraph_node`) |
 
 ## Workflow for Single Turn (Complete Info)
 

@@ -20,9 +20,9 @@ def supervisor_node(state: State, config=None) -> Command[Literal["call_preferen
     if complete_state == "not_started":
         # "not_started" - start collecting
         return Command(goto="call_preferences_subgraph_node")
-    elif complete_state == "completed":
-        # "completed" - fetch weather, then end
-        return Command(goto="call_weather_subgraph_node")
-    else:
-        # "incomplete" - continue collecting with the new input
+    elif complete_state == "incomplete":
+
         return Command(goto="call_preferences_subgraph_node")
+    else:
+
+        return Command(goto="call_weather_subgraph_node")

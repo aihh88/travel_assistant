@@ -8,6 +8,7 @@ import os
 import urllib.error
 import urllib.parse
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -156,3 +157,69 @@ def query_weather(
         sources=result.get("refer", {}).get("sources", []),
         license=result.get("refer", {}).get("license", []),
     )
+
+
+def get_travel_weather(
+    destination: str,
+    departure_date: str,
+    days: int
+) -> list[dict]:
+    """
+    获取游玩期间的天气预报
+
+    Args:
+        destination: 目的地城市名
+        departure_date: 出发日期 YYYY-MM-DD
+        days: 游玩天数
+
+    Returns:
+        游玩期间的天气预报列表
+
+    Raises:
+        ValueError: 参数无效
+        RuntimeError: 查询失败
+    """
+    if not destination or not departure_date or not days:
+        raise ValueError("destination, departure_date, days 不能为空")
+
+    if days <= 0:
+        raise ValueError("days 必须大于 0")
+
+    # 计算需要查询的天数
+    departure_date_obj = date.fromisoformat(departure_date)
+    today = date.today()
+    days_from_today = (departure_date_obj - today).days
+    needed_days = days_from_today + days
+
+    # 向上取整到 API 支持的天数
+    valid_days = {3, 7, 10, 15, 30}
+    query_days = min(filter(lambda d: d >= needed_days, valid_days), default=30)
+
+    # 查询城市ID
+    from .city_utils import lookup_city
+    city_info = lookup_city(destination)
+    if not city_info:
+        raise RuntimeError(f"无法找到城市: {destination}")
+
+    # 查询天气
+    weather_result = query_weather(city_info.id, query_days)
+
+    # 过滤并转换结果，只保留游玩期间的数据
+    travel_weather = []
+    for dw in weather_result.daily:
+        if date.fromisoformat(dw.fx_date) >= departure_date_obj:
+            travel_weather.append({
+                "date": dw.fx_date,
+                "temp_max": dw.temp_max,
+                "temp_min": dw.temp_min,
+                "text_day": dw.text_day,
+                "text_night": dw.text_night,
+                "wind_dir_day": dw.wind_dir_day,
+                "wind_scale_day": dw.wind_scale_day,
+                "precip": dw.precip,
+                "uv_index": dw.uv_index,
+            })
+            if len(travel_weather) >= days:
+                break
+
+    return travel_weather
