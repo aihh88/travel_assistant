@@ -20,13 +20,10 @@ class UserPreferences(TypedDict):
 class DayPlan(TypedDict):
     """单日行程计划"""
     day_number: int  # 第几天
-    city: str  # 城市
     date: str | None  # 日期
     morning: str | None  # 上午活动
     afternoon: str | None  # 下午活动
     evening: str | None  # 晚间活动
-    accommodation: str | None  # 住宿
-    transportation_to_next: str | None  # 前往下一站的交通
 
 
 class DayWeather(TypedDict):
@@ -51,6 +48,21 @@ class TravelWeather(TypedDict):
     daily: list[DayWeather]  # 每日天气列表
 
 
+class AttractionInfo(TypedDict):
+    """景点信息"""
+    name: str
+    location: str
+    address: str
+    rating: float | None
+    type: str
+
+
+class AttractionsResult(TypedDict):
+    """景点查询结果"""
+    destination: str
+    attractions: list[AttractionInfo]
+
+
 class BudgetBreakdown(TypedDict):
     """预算细分"""
     total_budget: float  # 总预算
@@ -60,6 +72,13 @@ class BudgetBreakdown(TypedDict):
     activities_cost: float  # 活动费用
     food_cost: float | None  # 餐饮费用
     contingency: float  # 应急储备
+
+
+class ErrorInfo(TypedDict):
+    """错误信息"""
+    source: str  # 错误来源节点
+    message: str  # 错误消息
+    recovery_hint: str | None  # 恢复提示
 
 
 class State(TypedDict):
@@ -77,8 +96,14 @@ class State(TypedDict):
     # 旅行天气
     travel_weather: TravelWeather | None
 
+    # 景点信息
+    attractions: list[AttractionsResult] | None
+
     # 预算细分
     budget_breakdown: BudgetBreakdown | None
 
     # Workflow state
     current_step: str
+
+    # 错误信息
+    error: ErrorInfo | None
